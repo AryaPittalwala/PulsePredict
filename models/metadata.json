@@ -1,0 +1,56 @@
+{
+  "trained_at": "2026-11-16T23:12:53.852058",
+  "feature_columns": [
+    "ret_lag1",
+    "ret_lag2",
+    "ret_lag3",
+    "ret_lag6",
+    "ret_lag12",
+    "vol_12",
+    "vol_36",
+    "rsi",
+    "macd_hist_norm",
+    "ema_ratio_close_9",
+    "ema_ratio_9_21",
+    "vwap_dev",
+    "vol_ratio",
+    "bar_range",
+    "day_open_dist",
+    "day_range_pos",
+    "overnight_gap",
+    "min_since_open",
+    "min_sin",
+    "min_cos",
+    "day_of_week",
+    "nifty_ret_lag1",
+    "nifty_ret_lag3",
+    "nifty_ret_lag6",
+    "nifty_vol_12",
+    "rel_strength_1"
+  ],
+  "class_names": [
+    "DOWN",
+    "NEUTRAL",
+    "UP"
+  ],
+  "class_map": {
+    "UP": 2,
+    "DOWN": 0,
+    "NEUTRAL": 1
+  },
+  "train_start": "2026-08-19 10:25:00+05:30",
+  "train_end": "2026-10-12 11:50:00+05:30",
+  "n_train_rows": 28420,
+  "best_iteration": 27,
+  "test_metrics": {
+    "seen_accuracy": 0.39045507338190266,
+    "seen_macro_f1": 0.38273847048050386,
+    "held_accuracy": 0.4391578947368421
+  },
+  "config": {
+    "HORIZON_BARS": 3,
+    "RANDOM_SEED": 42,
+    "HELDOUT_TICKER_FRACTION": 0.2,
+    "CONFIDENCE_THRESHOLD": 0.55
+  }
+}

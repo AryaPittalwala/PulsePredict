@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PulsePredict – NSE Intraday Intelligence</title>
+  <!-- Keep the application self-contained: blocked CDNs previously left #root empty. -->
+  <script src="/static/vendor/babel.min.js"></script>
+  <script src="/static/vendor/react.production.min.js"></script>
+  <script src="/static/vendor/react-dom.production.min.js"></script>
+  <script src="/static/vendor/plotly.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,700;0,800;1,700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #09090b;
+      --bg-card: #111117;
+      --bg-card-hover: #17171f;
+      --border: rgba(255,255,255,0.07);
+      --border-hover: rgba(255,255,255,0.14);
+      --text: #f4f4f5;
+      --text-muted: #71717a;
+      --text-dim: #3f3f46;
+      --green: #22c55e;
+      --green-dim: rgba(34,197,94,0.12);
+      --green-glow: rgba(34,197,94,0.25);
+      --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.12);
+      --amber: #f59e0b;
+      --blue: #3b82f6;
+      --blue-dim: rgba(59,130,246,0.12);
+      --purple: #a855f7;
+      --purple-dim: rgba(168,85,247,0.12);
+      --accent: #e2e8f0;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --radius-xs: 6px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    #root { min-height: 100vh; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+
+    /* Animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.8); }
+    }
+    @keyframes ticker-scroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    @keyframes shimmer {
+      0%   { background-position: -200% 0; }
+      100% { background-position:  200% 0; }
+    }
+    @keyframes glow-pulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(34,197,94,0.1); }
+      50%       { box-shadow: 0 0 40px rgba(34,197,94,0.25); }
+    }
+
+    .fade-up { animation: fadeUp 0.6s ease both; }
+    .fade-up-delay-1 { animation: fadeUp 0.6s 0.1s ease both; }
+    .fade-up-delay-2 { animation: fadeUp 0.6s 0.2s ease both; }
+    .fade-up-delay-3 { animation: fadeUp 0.6s 0.3s ease both; }
+
+    /* Gradient text */
+    .gradient-text {
+      background: linear-gradient(135deg, #f4f4f5 0%, #a1a1aa 60%, #71717a 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .gradient-green {
+      background: linear-gradient(135deg, #4ade80 0%, #22c55e 50%, #16a34a 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Nav */
+    .nav {
+      position: fixed; top: 12px; left: 24px; right: 24px; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px 0 19px;
+      height: 60px; border-radius: 18px;
+      background: linear-gradient(120deg, rgba(15,23,42,0.84), rgba(11,14,24,0.67) 48%, rgba(17,24,39,0.77));
+      backdrop-filter: blur(24px) saturate(175%);
+      -webkit-backdrop-filter: blur(24px) saturate(175%);
+      border: 1px solid rgba(148,163,184,0.18);
+      box-shadow: 0 16px 42px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.075);
+    }
+    .nav::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(105deg, rgba(59,130,246,0.10), transparent 33%, transparent 70%, rgba(34,197,94,0.055)); }
+    .nav-logo {
+      position: relative; display: flex; align-items: center; gap: 10px;
+      font-size: 17px; font-weight: 800; letter-spacing: -0.6px; cursor: pointer;
+    }
+    .nav-logo-dot {
+      width: 8px; height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+      box-shadow: 0 0 12px var(--green);
+    }
+    .nav-links { position: relative; display: flex; align-items: center; gap: 6px; }
+    .nav-link {
+      padding: 8px 12px; color: #a1a1aa;
+      font-size: 12px; font-weight: 600; letter-spacing: .01em;
+      border-radius: 9px;
+      cursor: pointer; transition: all 0.2s;
+      border: none; background: none;
+    }
+    .nav-link:hover { color: #eff6ff; background: rgba(59,130,246,0.12); box-shadow: inset 0 0 0 1px rgba(96,165,250,0.13); }
+    .nav-cta {
+      padding: 9px 16px; margin-left: 4px;
+      background: linear-gradient(135deg, #dbeafe, #93c5fd);
+      color: #0f172a; font-size: 12px; font-weight: 800;
+      border-radius: 10px; cursor: pointer; transition: all 0.2s; border: none;
+      box-shadow: 0 5px 18px rgba(59,130,246,0.20);
+    }
+    .nav-cta:hover { transform: translateY(-1px); background: #eff6ff; box-shadow: 0 8px 24px rgba(59,130,246,0.32); }
+
+    /* Market status pill */
+    .market-pill {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 11px; margin-right: 5px;
+      background: rgba(2,6,23,0.38);
+      border: 1px solid rgba(148,163,184,0.14);
+      border-radius: 20px;
+      font-size: 12px; font-weight: 500;
+      color: var(--text-muted);
+    }
+    @media (max-width: 680px) { .nav { left: 10px; right: 10px; top: 8px; padding: 0 10px; } .market-pill { display: none; } .nav-link { display: none; } .nav-cta { padding: 8px 11px; } }
+    .market-pill-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    /* Ticker tape */
+    .ticker-tape {
+      display: flex; align-items: center; gap: 16px;
+      background: linear-gradient(90deg, rgba(10,15,27,0.94), rgba(17,17,29,0.82), rgba(10,15,27,0.94));
+      border-bottom: 1px solid var(--border);
+      padding: 12px 32px;
+    }
+    .ticker-viewport { flex: 1; overflow: hidden; position: relative; mask-image: linear-gradient(90deg, transparent, black 4%, black 96%, transparent); }
+    .ticker-viewport::before, .ticker-viewport::after { content: ''; position: absolute; z-index: 1; top: 0; bottom: 0; width: 42px; pointer-events: none; }
+    .ticker-viewport::before { left: 0; background: linear-gradient(90deg, rgba(10,15,27,0.88), transparent); }
+    .ticker-viewport::after { right: 0; background: linear-gradient(270deg, rgba(10,15,27,0.88), transparent); }
+    .ticker-inner {
+      display: flex; align-items: center;
+      width: max-content;
+      will-change: transform; animation: ticker-scroll 38s linear infinite;
+    }
+    .ticker-tape:hover .ticker-inner { animation-play-state: paused; }
+    .ticker-label {
+      flex: 0 0 auto; color: #93c5fd; font-size: 10px;
+      font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
+      padding: 5px 10px; border: 1px solid rgba(59,130,246,0.25); border-radius: 999px; background: rgba(59,130,246,0.08);
+    }
+    .ticker-group { display: flex; align-items: center; gap: 10px; padding-right: 10px; }
+    .ticker-item {
+      flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+      padding: 7px 11px; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px; background: rgba(255,255,255,0.02);
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .ticker-item:hover { border-color: rgba(59,130,246,0.48); background: rgba(59,130,246,0.08); }
+    .ticker-loading { color: var(--text-muted); font-size: 12px; }
+
+    /* Landing atmosphere */
+    .landing-shell {
+      position: relative; isolation: isolate; overflow: hidden;
+      background:
+        radial-gradient(ellipse 70% 42% at 50% 2%, rgba(59,130,246,0.15), transparent 70%),
+        radial-gradient(ellipse 45% 28% at 7% 34%, rgba(99,102,241,0.10), transparent 75%),
+        radial-gradient(ellipse 45% 30% at 96% 67%, rgba(34,197,94,0.07), transparent 76%),
+        #09090b;
+    }
+    .landing-shell > * { position: relative; z-index: 1; }
+    .landing-shell::before {
+      content: ''; position: absolute; z-index: 0; inset: 0;
+      background-image: linear-gradient(rgba(148,163,184,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.045) 1px, transparent 1px);
+      background-size: 52px 52px; mask-image: linear-gradient(to bottom, black 0%, transparent 48%);
+      pointer-events: none;
+    }
+    .landing-shell::after {
+      content: ''; position: absolute; z-index: 0; width: 620px; height: 620px; top: 330px; left: 50%; transform: translateX(-50%);
+      border: 1px solid rgba(59,130,246,0.12); border-radius: 50%;
+      box-shadow: 0 0 0 80px rgba(59,130,246,0.025), 0 0 0 160px rgba(59,130,246,0.018);
+      pointer-events: none;
+    }
+
+    /* Prediction terminal */
+    .prediction-shell {
+      min-height: 100vh; padding-top: 84px; position: relative; overflow: hidden;
+      background: radial-gradient(ellipse at 12% 2%, rgba(59,130,246,0.16), transparent 31%),
+        radial-gradient(ellipse at 88% 22%, rgba(99,102,241,0.13), transparent 30%), #080b14;
+    }
+    .prediction-toolbar {
+      position: relative; z-index: 1; padding: 24px 32px;
+      background: rgba(12,13,20,0.54); border-bottom: 1px solid rgba(255,255,255,0.07);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    }
+    .prediction-toolbar-inner { max-width: 1240px; margin: 0 auto; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+    .prediction-back { color: var(--text-muted); background: rgba(255,255,255,0.035); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-size: 12px; padding: 8px 11px; }
+    .prediction-title { font-size: 30px; font-weight: 900; letter-spacing: -1.3px; line-height: 1; }
+    .prediction-subtitle { color: var(--text-muted); font-size: 13px; margin-top: 7px; }
+    .prediction-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    .glass-control { background: rgba(8,9,13,0.62); border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; color: var(--text); font: 500 13px Inter, sans-serif; }
+    .prediction-layout { max-width: 1240px; margin: 0 auto; padding: 30px 32px 64px; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; position: relative; z-index: 1; }
+    .prediction-card { background: linear-gradient(145deg, rgba(23,25,35,0.82), rgba(13,14,20,0.72)); border: 1px solid rgba(255,255,255,0.09); box-shadow: 0 20px 60px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.035); }
+    .chart-card { padding: 22px; border-radius: 20px; }
+    .forecast-card { padding: 26px; border-radius: 20px; position: sticky; top: 84px; overflow: hidden; }
+    .forecast-card::before { content: ''; position: absolute; width: 190px; height: 190px; top: -100px; right: -80px; background: radial-gradient(circle, rgba(59,130,246,0.25), transparent 68%); pointer-events: none; }
+    .section-kicker { color: var(--text-muted); font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+    .chart-heading { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+    .stock-overview { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: end; width: 100%; }
+    .stock-overview .stock-symbol { color: #93c5fd; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .stock-overview .stock-name { color: #f8fafc; font-size: 24px; font-weight: 800; letter-spacing: -.8px; margin-top: 6px; }
+    .stock-overview .stock-price { color: #f8fafc; font-size: 34px; font-weight: 850; letter-spacing: -1.4px; margin-top: 12px; }
+    .stock-overview .stock-change { font-size: 13px; font-weight: 700; margin-left: 8px; }
+    .ohlc-strip { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: #94a3b8; font-size: 11px; }
+    .ohlc-strip b { color: #e2e8f0; font-size: 12px; margin-left: 4px; }
+    .chart-periods { display: flex; border-top: 1px solid rgba(255,255,255,.08); margin-top: 10px; padding-top: 14px; gap: 8px; flex-wrap: wrap; }
+    .period-chip { border: 1px solid rgba(148,163,184,.22); border-radius: 999px; background: rgba(15,23,42,.5); color: #94a3b8; padding: 6px 11px; font: 600 11px Inter, sans-serif; }
+    .period-chip.active { color: #dbeafe; border-color: #3b82f6; background: rgba(59,130,246,.17); }
+    .blue-accent .pred-up { color: var(--green); background: var(--green-dim); border-color: rgba(34,197,94,.38); }
+    @media (max-width: 900px) { .prediction-layout { grid-template-columns: 1fr; padding: 18px; } .forecast-card { position: static; } .prediction-toolbar { padding: 18px; } .prediction-controls { margin-left: 0; width: 100%; } }
+    .ticker-name { color: var(--text-muted); }
+    .ticker-price { color: var(--text); }
+    .ticker-change-pos { color: var(--green); }
+    .ticker-change-neg { color: var(--red); }
+
+    /* Hero */
+    .hero {
+      padding: 160px 32px 100px;
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(59,130,246,0.13) 0%, rgba(34,197,94,0.035) 42%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero::before { z-index: 0; }
+    .hero > :not(.hero-sparkline) { position: relative; z-index: 1; }
+    .hero-sparkline {
+      position: absolute; z-index: 0; left: 50%; bottom: 8px; transform: translateX(-50%);
+      width: min(860px, 92%); height: 230px; opacity: 0.32; pointer-events: none;
+      mask-image: linear-gradient(to bottom, transparent, black 24%, black 78%, transparent);
+    }
+    .hero-sparkline .spark-grid { stroke: rgba(74,222,128,0.22); stroke-width: 1; stroke-dasharray: 4 8; }
+    .hero-sparkline .spark-fill { fill: url(#heroSparkFill); }
+    .hero-sparkline .spark-line { fill: none; stroke: #4ade80; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 8px rgba(34,197,94,.8)); }
+    .hero-sparkline .spark-dot { fill: #86efac; filter: drop-shadow(0 0 8px #22c55e); }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px;
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.2);
+      border-radius: 20px;
+      font-size: 12px; font-weight: 600;
+      color: var(--green);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    .hero-title {
+      font-size: clamp(48px, 7vw, 88px);
+      font-weight: 900;
+      letter-spacing: -3px;
+      line-height: 0.95;
+      margin-bottom: 28px;
+    }
+    .hero-title-serif {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+    }
+    .hero-subtitle {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 560px;
+      margin: 0 auto 48px;
+      line-height: 1.65;
+      font-weight: 400;
+    }
+    .hero-actions { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+    .btn-primary {
+      padding: 14px 28px;
+      background: var(--text);
+      color: var(--bg);
+      font-size: 15px; font-weight: 700;
+      border-radius: var(--radius-sm);
+      cursor: pointer; transition: all 0.2s;
+      border: none; display: flex; align-items: center; gap: 8px;
+    }
+    .btn-primary:hover { background: #d4d4d8; transform: translateY(-1px); }
+    .btn-outline {
+      padding: 14px 28px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 15px; font-weight: 500;
+      border-radius: var(--radius-sm);
+      cursor: pointer; transition: all 0.2s;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .btn-outline:hover { border-color: var(--border-hover); color: var(--text); background: rgba(255,255,255,0.03); }
+
+    /* Stats strip */
+    .stats-strip {
+      display: flex; align-items: center; justify-content: center;
+      gap: 48px; flex-wrap: wrap;
+      padding: 40px 32px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.01);
+    }
+    .stat-item { text-align: center; }
+    .stat-number { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+    .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* Section */
+    .section { padding: 80px 32px; max-width: 1200px; margin: 0 auto; }
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: clamp(32px, 4vw, 52px);
+      font-weight: 900; letter-spacing: -1.5px;
+      line-height: 1.05; margin-bottom: 16px;
+    }
+    .section-desc { font-size: 17px; color: var(--text-muted); max-width: 480px; line-height: 1.65; }
+
+    /* Bento grid */
+    .bento {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+      margin-top: 48px;
+    }
+    .bento-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .bento-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+    }
+    .bento-card:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+    }
+    .bento-col-7  { grid-column: span 7; }
+    .bento-col-5  { grid-column: span 5; }
+    .bento-col-4  { grid-column: span 4; }
+    .bento-col-3  { grid-column: span 3; }
+    .bento-col-6  { grid-column: span 6; }
+    .bento-col-8  { grid-column: span 8; }
+    .bento-col-12 { grid-column: span 12; }
+    @media (max-width: 900px) {
+      .bento-col-7, .bento-col-5, .bento-col-4, .bento-col-3, .bento-col-6, .bento-col-8 { grid-column: span 12; }
+    }
+
+    /* Card elements */
+    .card-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 20px;
+    }
+    .tag-green  { background: var(--green-dim);  color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+    .tag-red    { background: var(--red-dim);    color: var(--red);   border: 1px solid rgba(239,68,68,0.2); }
+    .tag-blue   { background: var(--blue-dim);   color: var(--blue);  border: 1px solid rgba(59,130,246,0.2); }
+    .tag-purple { background: var(--purple-dim); color: var(--purple);border: 1px solid rgba(168,85,247,0.2); }
+    .tag-amber  { background: rgba(245,158,11,0.1); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
+
+    .card-title { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
+    .card-desc  { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+
+    /* Stock row in movers card */
+    .stock-row {
+      display: flex; align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+    .stock-row:last-child { border-bottom: none; }
+    .stock-ticker { font-size: 13px; font-weight: 700; min-width: 90px; }
+    .stock-name { font-size: 12px; color: var(--text-muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stock-price { font-size: 13px; font-weight: 600; }
+    .stock-chg {
+      font-size: 12px; font-weight: 700;
+      padding: 3px 8px; border-radius: 4px;
+      min-width: 64px; text-align: center;
+    }
+    .chg-pos { background: var(--green-dim); color: var(--green); }
+    .chg-neg { background: var(--red-dim); color: var(--red); }
+
+    /* Mini sparkline SVG */
+    .sparkline-wrap { flex-shrink: 0; }
+
+    /* Prediction pill */
+    .pred-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 10px 20px;
+      border-radius: 100px;
+      font-size: 15px; font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .pred-up      { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+    .pred-down    { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(239,68,68,0.3); }
+    .pred-neutral { background: rgba(255,255,255,0.05); color: #a1a1aa; border: 1px solid rgba(255,255,255,0.1); }
+
+    /* Probability bar */
+    .prob-bar-wrap { margin: 6px 0; }
+    .prob-bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+    .prob-bar-track { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .prob-bar-fill  { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+
+    /* Search */
+    .search-wrap {
+      position: relative;
+      max-width: 520px;
+      margin: 0 auto 60px;
+    }
+    .search-input {
+      width: 100%;
+      padding: 16px 20px 16px 48px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .search-input:focus { border-color: var(--border-hover); background: var(--bg-card-hover); }
+    .search-input::placeholder { color: var(--text-dim); }
+    .search-icon {
+      position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+    .search-results {
+      position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      z-index: 50;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .search-result-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .search-result-item:hover { background: rgba(255,255,255,0.04); }
+
+    /* Features grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      margin-top: 48px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    @media (max-width: 768px) { .features-grid { grid-template-columns: 1fr; } }
+    .feature-cell {
+      padding: 36px 32px;
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    .feature-cell:hover { background: var(--bg-card-hover); }
+    .feature-icon {
+      width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 10px;
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+    .feature-name { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .feature-desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+
+    /* Disclaimer */
+    .disclaimer {
+      text-align: center;
+      padding: 24px 32px;
+      background: rgba(245,158,11,0.04);
+      border-top: 1px solid rgba(245,158,11,0.1);
+      border-bottom: 1px solid rgba(245,158,11,0.1);
+      font-size: 12px;
+      color: #78716c;
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    .footer {
+      padding: 48px 32px;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo { font-size: 15px; font-weight: 800; }
+    .footer-note { font-size: 12px; color: var(--text-muted); }
+
+    /* Loading skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, #18181b 25%, #27272a 50%, #18181b 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+
+    /* Scrollbar */
+    .tab-row { display: flex; gap: 4px; margin-bottom: 20px; }
+    .tab-btn {
+      padding: 7px 14px;
+      border-radius: var(--radius-xs);
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+      border: none;
+    }
+    .tab-active   { background: var(--text); color: var(--bg); }
+    .tab-inactive { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+
+    /* News item */
+    .news-item {
+      display: flex; gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: flex-start;
+    }
+    .news-item:last-child { border-bottom: none; }
+    .news-sentiment-pill {
+      flex-shrink: 0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase;
+    }
+    .sent-pos  { background: var(--green-dim); color: var(--green); }
+    .sent-neg  { background: var(--red-dim); color: var(--red); }
+    .sent-neut { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+    .news-headline { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+    /* Live dot */
+    .live-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse-dot 1.5s ease-in-out infinite;
+      box-shadow: 0 0 6px var(--green);
+    }
+
+    /* Big number display */
+    .big-num {
+      font-size: 48px; font-weight: 900;
+      letter-spacing: -2px; line-height: 1;
+      margin: 16px 0 4px;
+    }
+    .big-num-label { font-size: 13px; color: var(--text-muted); }
+
+    /* CTA section */
+    .cta-section {
+      max-width: 1200px; margin: 0 auto;
+      padding: 80px 32px;
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center;
+    }
+    .cta-box {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 80px 48px;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-box::before {
+      content: '';
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 500px; height: 300px;
+      background: radial-gradient(ellipse, rgba(34,197,94,0.07) 0%, transparent 70%);
+    }
+    .cta-title { font-size: clamp(36px, 5vw, 60px); font-weight: 900; letter-spacing: -2px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+<div id="root" aria-live="polite">Loading PulsePredict…</div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── Tiny fetch helper ──────────────────────────────────────────────────────
+async function api(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
+  return res.json();
+}
+
+// ── Mini SVG Sparkline ─────────────────────────────────────────────────────
+function Sparkline({ data = [], positive = true, width = 100, height = 36 }) {
+  if (!data || data.length < 2) return null;
+  const mn = Math.min(...data), mx = Math.max(...data);
+  const rng = mx - mn || 1;
+  const pad = 3;
+  const pts = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * (width - pad * 2);
+    const y = (height - pad) - ((v - mn) / rng) * (height - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const color = positive ? "#22c55e" : "#ef4444";
+  const lastPt = pts.split(" ").pop().split(",");
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={lastPt[0]} cy={lastPt[1]} r="2.5" fill={color} />
+    </svg>
+  );
+}
+
+// ── Market Status Pill ─────────────────────────────────────────────────────
+function MarketPill({ status }) {
+  const isOpen = status?.is_open;
+  return (
+    <div className="market-pill">
+      <span className="market-pill-dot" style={{ background: isOpen ? "#22c55e" : "#71717a" }} />
+      <span>NSE {status?.status || "—"}</span>
+      <span style={{ color: "#52525b" }}>·</span>
+      <span>{status?.time || "..."}</span>
+    </div>
+  );
+}
+
+// ── Navbar ─────────────────────────────────────────────────────────────────
+function Nav({ status, onNavigate }) {
+  return (
+    <nav className="nav">
+      <div className="nav-logo" onClick={() => onNavigate("landing")}>
+        <span className="nav-logo-dot" />
+        <span>PulsePredict</span>
+      </div>
+      <div className="nav-links">
+        <MarketPill status={status} />
+        <button className="nav-link" onClick={() => onNavigate("predict")}>Predict</button>
+        <button className="nav-link" onClick={() => onNavigate("scoreboard")}>Scoreboard</button>
+        <button className="nav-cta" onClick={() => onNavigate("predict")}>Try it free →</button>
+      </div>
+    </nav>
+  );
+}
+
+// ── Ticker Tape ────────────────────────────────────────────────────────────
+function TickerTape({ movers, onSelect }) {
+  const items = [...(movers?.gainers || []), ...(movers?.losers || [])];
+  const snapshot = items.slice(0, 8);
+  return (
+    <div className="ticker-tape" style={{ marginTop: 84 }}>
+      <span className="ticker-label">Market snapshot</span>
+      <div className="ticker-viewport">
+        {items.length ? <div className="ticker-inner">
+          <div className="ticker-group">{snapshot.map((s, index) => (
+          <button key={`${s.ticker}-${index}`} type="button" className="ticker-item" onClick={() => onSelect(s.ticker)}>
+            <span className="ticker-name">{s.ticker?.replace(".NS","")}</span>
+            <span className="ticker-price">₹{s.price?.toLocaleString("en-IN")}</span>
+            <span className={s.is_positive ? "ticker-change-pos" : "ticker-change-neg"}>
+              {s.is_positive ? "▲" : "▼"} {Math.abs(s.change_pct).toFixed(2)}%
+            </span>
+          </button>
+          ))}</div>
+          <div className="ticker-group" aria-hidden="true">{snapshot.map((s, index) => (
+          <button key={`${s.ticker}-loop-${index}`} type="button" className="ticker-item" onClick={() => onSelect(s.ticker)}>
+            <span className="ticker-name">{s.ticker?.replace(".NS","")}</span>
+            <span className="ticker-price">â‚¹{s.price?.toLocaleString("en-IN")}</span>
+            <span className={s.is_positive ? "ticker-change-pos" : "ticker-change-neg"}>
+              {s.is_positive ? "â–²" : "â–¼"} {Math.abs(s.change_pct).toFixed(2)}%
+            </span>
+          </button>
+          ))}</div>
+        </div> : <span className="ticker-loading">Loading latest market prices...</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── Stock Row ──────────────────────────────────────────────────────────────
+function StockRow({ stock, onSelect }) {
+  return (
+    <div className="stock-row" style={{ cursor: "pointer" }} onClick={() => onSelect && onSelect(stock.ticker)}>
+      <div>
+        <div className="stock-ticker">{stock.ticker?.replace(".NS", "")}</div>
+        <div className="stock-name">{stock.name}</div>
+      </div>
+      <div style={{ flex: 1 }} />
+      <div>
+        <div className="stock-price">₹{stock.price?.toLocaleString("en-IN")}</div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "right" }}>
+          {stock.change >= 0 ? "+" : ""}{stock.change?.toFixed(2)}
+        </div>
+      </div>
+      <div className={`stock-chg ${stock.is_positive ? "chg-pos" : "chg-neg"}`}>
+        {stock.is_positive ? "▲" : "▼"} {Math.abs(stock.change_pct).toFixed(2)}%
+      </div>
+      <div className="sparkline-wrap">
+        <Sparkline data={stock.sparkline} positive={stock.is_positive} width={80} height={30} />
+      </div>
+    </div>
+  );
+}
+
+// ── Movers Card ────────────────────────────────────────────────────────────
+function MoversCard({ title, tag, tagClass, stocks = [], onSelect }) {
+  return (
+    <div className="bento-card" style={{ height: "100%" }}>
+      <div className={`card-tag ${tagClass}`}>{tag}</div>
+      <div className="card-title">{title}</div>
+      <div style={{ marginTop: 16 }}>
+        {stocks.length === 0
+          ? [1,2,3,4,5].map(i => (
+              <div key={i} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
+                <div className="skeleton" style={{ height: 12, width: "60%", marginBottom: 6 }} />
+                <div className="skeleton" style={{ height: 10, width: "40%" }} />
+              </div>
+            ))
+          : stocks.map((s, i) => <StockRow key={i} stock={s} onSelect={onSelect} />)
+        }
+      </div>
+    </div>
+  );
+}
+
+// ── Prediction Demo Card ───────────────────────────────────────────────────
+function PredictionDemoCard({ onNavigate }) {
+  const demos = [
+    { ticker: "RELIANCE", label: "UP", conf: 72, up: 72, down: 15, neutral: 13, color: "var(--green)" },
+    { ticker: "HDFCBANK", label: "NEUTRAL", conf: 61, up: 28, down: 18, neutral: 61, color: "#a1a1aa" },
+    { ticker: "TCS", label: "DOWN", conf: 67, up: 12, down: 67, neutral: 21, color: "var(--red)" },
+  ];
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setIdx(i => (i + 1) % demos.length), 3000);
+    return () => clearInterval(t);
+  }, []);
+  const d = demos[idx];
+  const predClass = d.label === "UP" ? "pred-up" : d.label === "DOWN" ? "pred-down" : "pred-neutral";
+  const bars = [
+    { label: "UP",      pct: d.up,      color: "var(--green)" },
+    { label: "NEUTRAL", pct: d.neutral, color: "#52525b"      },
+    { label: "DOWN",    pct: d.down,    color: "var(--red)"   },
+  ];
+  return (
+    <div className="bento-card" style={{ height: "100%" }}>
+      <div className="card-tag tag-purple">AI Prediction</div>
+      <div className="card-title">15-Min Forecast</div>
+      <div style={{ marginTop: 24, textAlign: "center" }}>
+        <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 10 }}>
+          <span className="live-dot" /> &nbsp;{d.ticker}.NS
+        </div>
+        <div className={`pred-badge ${predClass}`} style={{ margin: "0 auto 20px" }}>
+          {d.label === "UP" ? "▲" : d.label === "DOWN" ? "▼" : "●"} {d.label}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>
+          Confidence: <strong style={{ color: d.color }}>{d.conf}%</strong>
+        </div>
+        {bars.map(b => (
+          <div key={b.label} className="prob-bar-wrap">
+            <div className="prob-bar-label">
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{b.label}</span>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>{b.pct}%</span>
+            </div>
+            <div className="prob-bar-track">
+              <div className="prob-bar-fill" style={{ width: `${b.pct}%`, background: b.color }} />
+            </div>
+          </div>
+        ))}
+        <button className="btn-primary" style={{ width: "100%", marginTop: 24, justifyContent: "center" }}
+          onClick={() => onNavigate("predict")}>
+          Get Live Prediction →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── News Sentiment Card ────────────────────────────────────────────────────
+function NewsCard() {
+  const demoNews = [
+    { headline: "RBI keeps repo rate unchanged at 6.5% in MPC meeting", sentiment: 0.3 },
+    { headline: "Reliance Industries Q2 profit surges 28% YoY on retail growth", sentiment: 0.72 },
+    { headline: "SEBI tightens F&O regulations amid retail trader losses", sentiment: -0.45 },
+    { headline: "TCS bags $1.2B multi-year deal with European bank", sentiment: 0.65 },
+    { headline: "Crude oil hits $95/bbl — pressure on import-heavy sectors", sentiment: -0.38 },
+  ];
+  return (
+    <div className="bento-card" style={{ height: "100%" }}>
+      <div className="card-tag tag-amber">Live Sentiment</div>
+      <div className="card-title">News Radar</div>
+      <div style={{ marginTop: 16 }}>
+        {demoNews.map((n, i) => {
+          const cls = n.sentiment > 0.1 ? "sent-pos" : n.sentiment < -0.1 ? "sent-neg" : "sent-neut";
+          const label = n.sentiment > 0.1 ? "Bullish" : n.sentiment < -0.1 ? "Bearish" : "Neutral";
+          return (
+            <div key={i} className="news-item">
+              <span className={`news-sentiment-pill ${cls}`}>{label}</span>
+              <span className="news-headline">{n.headline}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Stats Card ─────────────────────────────────────────────────────────────
+function ScoreCard({ scoreboard }) {
+  const acc = scoreboard?.overall_accuracy;
+  const total = scoreboard?.total_predictions || 0;
+  const resolved = scoreboard?.resolved_predictions || 0;
+  return (
+    <div className="bento-card" style={{ height: "100%" }}>
+      <div className="card-tag tag-blue">Model Health</div>
+      <div className="card-title">Scoreboard</div>
+      <div style={{ display: "flex", gap: 24, marginTop: 24, flexWrap: "wrap" }}>
+        <div>
+          <div className="big-num gradient-green">{acc != null ? `${(acc * 100).toFixed(1)}%` : "—"}</div>
+          <div className="big-num-label">Overall Accuracy</div>
+        </div>
+        <div>
+          <div className="big-num" style={{ fontSize: 36 }}>{total}</div>
+          <div className="big-num-label">Total Predictions</div>
+        </div>
+        <div>
+          <div className="big-num" style={{ fontSize: 36 }}>{resolved}</div>
+          <div className="big-num-label">Resolved</div>
+        </div>
+      </div>
+      {scoreboard?.recent?.slice(0, 3).map((r, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12,
+          padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 12 }}>
+          <span style={{ fontWeight: 700, color: "var(--text-muted)" }}>{r.ticker?.replace(".NS","")}</span>
+          <span className={`pred-badge ${r.pred_label === "UP" ? "pred-up" : r.pred_label === "DOWN" ? "pred-down" : "pred-neutral"}`}
+            style={{ padding: "2px 8px", fontSize: 10 }}>{r.pred_label}</span>
+          {r.actual_label && <span style={{ color: r.correct ? "var(--green)" : "var(--red)", fontWeight: 700 }}>
+            {r.correct ? "✓" : "✗"} {r.actual_label}
+          </span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Volume Shockers ────────────────────────────────────────────────────────
+function VolumeCard({ stocks = [], onSelect }) {
+  return (
+    <div className="bento-card" style={{ height: "100%" }}>
+      <div className="card-tag tag-purple">Volume</div>
+      <div className="card-title">Unusual Activity</div>
+      <div style={{ marginTop: 16 }}>
+        {stocks.slice(0, 5).map((s, i) => (
+          <div key={i} className="stock-row" style={{ cursor: "pointer" }} onClick={() => onSelect?.(s.ticker)}>
+            <div style={{ width: 24, color: "var(--text-muted)", fontSize: 12, fontWeight: 700 }}>{i + 1}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{s.ticker?.replace(".NS", "")}</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{s.name}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>{(s.volume / 1e6).toFixed(1)}M</div>
+              <div className={`stock-chg ${s.is_positive ? "chg-pos" : "chg-neg"}`} style={{ marginTop: 2 }}>
+                {s.is_positive ? "▲" : "▼"} {Math.abs(s.change_pct).toFixed(1)}%
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Search Bar ─────────────────────────────────────────────────────────────
+function SearchBar({ universe, onSelect }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState([]);
+  const ref = useRef();
+
+  useEffect(() => {
+    const all = [...(universe?.nifty50 || []), ...(universe?.nifty100 || [])];
+    const uniq = Array.from(new Map(all.map(x => [x.ticker, x])).values());
+    if (!q.trim()) { setResults([]); return; }
+    const filt = uniq.filter(x =>
+      x.ticker.toLowerCase().includes(q.toLowerCase()) ||
+      x.name.toLowerCase().includes(q.toLowerCase())
+    ).slice(0, 8);
+    setResults(filt);
+  }, [q, universe]);
+
+  useEffect(() => {
+    const handler = e => { if (!ref.current?.contains(e.target)) setResults([]); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div className="search-wrap" ref={ref}>
+      <svg className="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input className="search-input" placeholder="Search any NIFTY stock… e.g. RELIANCE, HDFC, TCS"
+        value={q} onChange={e => setQ(e.target.value)} />
+      {results.length > 0 && (
+        <div className="search-results">
+          {results.map((r, i) => (
+            <div key={i} className="search-result-item" onClick={() => { onSelect(r.ticker); setQ(""); setResults([]); }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{r.ticker.replace(".NS","")}</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{r.name}</div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Features Section ───────────────────────────────────────────────────────
+function FeaturesSection() {
+  const features = [
+    { icon: "🧠", bg: "var(--purple-dim)", title: "LightGBM Model", desc: "Walk-forward trained on 5-min OHLCV bars with 28K+ purged rows and class-balanced weights." },
+    { icon: "📰", bg: "rgba(245,158,11,0.1)", title: "Live News Sentiment", desc: "FinBERT or lexicon fallback scores Google News headlines and shifts probability mass in real time." },
+    { icon: "📈", bg: "var(--blue-dim)", title: "15-Min Horizon", desc: "Predicts UP / DOWN / NEUTRAL over the next 3 five-minute bars with volatility-adaptive thresholds." },
+    { icon: "🔁", bg: "var(--green-dim)", title: "Replay Mode", desc: "Step through any historical date with strict zero-lookahead guarantees — no future data ever leaks." },
+    { icon: "🎯", bg: "var(--red-dim)", title: "Scoreboard", desc: "Automated resolution of predictions after the horizon elapses. Track live accuracy over time." },
+    { icon: "🏦", bg: "rgba(255,255,255,0.05)", title: "NIFTY 100 Universe", desc: "Full NIFTY 50 & 100 coverage. Validated tickers, batch downloads, and SQLite caching." },
+  ];
+  return (
+    <section className="section">
+      <div className="section-label">How it works</div>
+      <div className="section-title">
+        Built on <span className="gradient-green">real signal</span>,<br />not noise.
+      </div>
+      <div className="section-desc">
+        Every prediction is the output of a no-lookahead pipeline — from raw 5-minute bars to a probability distribution with live news adjustment.
+      </div>
+      <div className="features-grid">
+        {features.map((f, i) => (
+          <div key={i} className="feature-cell">
+            <div className="feature-icon" style={{ background: f.bg }}>{f.icon}</div>
+            <div className="feature-name">{f.title}</div>
+            <div className="feature-desc">{f.desc}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Landing Page ───────────────────────────────────────────────────────────
+function LandingPage({ status, movers, universe, scoreboard, onNavigate, onSelectStock }) {
+  return (
+    <main className="landing-shell">
+      <TickerTape movers={movers} onSelect={onSelectStock} />
+
+      {/* Hero */}
+      <div className="hero">
+        <svg className="hero-sparkline" viewBox="0 0 900 240" aria-hidden="true" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="heroSparkFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path className="spark-grid" d="M0 52H900M0 112H900M0 172H900" />
+          <path className="spark-fill" d="M0 202 L42 185 L84 193 L126 158 L168 174 L210 142 L252 158 L294 126 L336 144 L378 110 L420 130 L462 88 L504 108 L546 70 L588 96 L630 62 L672 78 L714 44 L756 60 L798 31 L840 48 L900 16 L900 240 L0 240 Z" />
+          <path className="spark-line" d="M0 202 L42 185 L84 193 L126 158 L168 174 L210 142 L252 158 L294 126 L336 144 L378 110 L420 130 L462 88 L504 108 L546 70 L588 96 L630 62 L672 78 L714 44 L756 60 L798 31 L840 48 L900 16" />
+          <circle className="spark-dot" cx="900" cy="16" r="5" />
+        </svg>
+        <div className="hero-eyebrow fade-up">
+          <span className="live-dot" /> &nbsp;NSE Intraday Intelligence · Free & Open Source
+        </div>
+        <h1 className="hero-title fade-up-delay-1">
+          <span className="gradient-text">Predict the next</span><br />
+          <span className="hero-title-serif gradient-green">15 minutes.</span>
+        </h1>
+        <p className="hero-subtitle fade-up-delay-2">
+          AI-powered direction forecasting for NIFTY 100 stocks — combining historical price models with live breaking news sentiment. No paid APIs. No future leakage.
+        </p>
+        <div className="hero-actions fade-up-delay-3">
+          <button className="btn-primary" onClick={() => onNavigate("predict")}>
+            Start Predicting →
+          </button>
+          <button className="btn-outline" onClick={() => onNavigate("scoreboard")}>
+            View Scoreboard
+          </button>
+        </div>
+      </div>
+
+      {/* Stats strip */}
+      <div className="stats-strip">
+        {[
+          { n: "100", l: "NIFTY Stocks" },
+          { n: "70K+", l: "Price Bars" },
+          { n: "22", l: "Tests Passing" },
+          { n: "15 min", l: "Horizon" },
+          { n: "Free", l: "No Paid APIs" },
+        ].map((s, i) => (
+          <div key={i} className="stat-item">
+            <div className="stat-number gradient-green">{s.n}</div>
+            <div className="stat-label">{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bento search + movers */}
+      <section className="section">
+        <div className="section-label">Live Markets</div>
+        <div className="section-title">What's moving<br /><span className="gradient-text">right now.</span></div>
+
+        <div style={{ marginTop: 40, marginBottom: 8 }}>
+          <SearchBar universe={universe} onSelect={onSelectStock} />
+        </div>
+
+        <div className="bento">
+          {/* Gainers */}
+          <div className="bento-col-4">
+            <MoversCard title="Top Gainers" tag="▲ Gainers" tagClass="tag-green"
+              stocks={movers?.gainers || []} onSelect={onSelectStock} />
+          </div>
+          {/* Losers */}
+          <div className="bento-col-4">
+            <MoversCard title="Top Losers" tag="▼ Losers" tagClass="tag-red"
+              stocks={movers?.losers || []} onSelect={onSelectStock} />
+          </div>
+          {/* Prediction demo */}
+          <div className="bento-col-4">
+            <PredictionDemoCard onNavigate={onNavigate} />
+          </div>
+          {/* Volume */}
+          <div className="bento-col-5">
+            <VolumeCard stocks={movers?.volume_shockers || []} onSelect={onSelectStock} />
+          </div>
+          {/* News */}
+          <div className="bento-col-4">
+            <NewsCard />
+          </div>
+          {/* Score */}
+          <div className="bento-col-3">
+            <ScoreCard scoreboard={scoreboard} />
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <FeaturesSection />
+
+      {/* CTA */}
+      <section className="cta-section">
+        <div className="cta-box">
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div className="hero-eyebrow" style={{ margin: "0 auto 24px" }}>
+              <span className="live-dot" /> &nbsp;Built for Tuesday. Not a SaaS deck.
+            </div>
+            <h2 className="cta-title gradient-text">
+              Stop guessing.<br />Start predicting.
+            </h2>
+            <p style={{ color: "var(--text-muted)", marginBottom: 36, fontSize: 17 }}>
+              Pick any NIFTY stock. Get a live 15-minute direction forecast with news-adjusted probabilities in seconds.
+            </p>
+            <button className="btn-primary" style={{ margin: "0 auto", fontSize: 16, padding: "16px 36px" }}
+              onClick={() => onNavigate("predict")}>
+              Launch Prediction Terminal →
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+// ── Technical Indicator Helpers ─────────────────────────────────────────────
+function computeVWAP(candles, volumes) {
+  // Reset per trading day — group by date prefix
+  let cumTP = 0, cumVol = 0;
+  let lastDay = null;
+  return candles.map((c, i) => {
+    const day = c.t ? c.t.substring(0, 10) : null;
+    if (day !== lastDay) { cumTP = 0; cumVol = 0; lastDay = day; }
+    const tp = (c.h + c.l + c.c) / 3;
+    const v  = volumes?.[i]?.v || 0;
+    cumTP  += tp * v;
+    cumVol += v;
+    return cumVol > 0 ? cumTP / cumVol : c.c;
+  });
+}
+
+function computeEMA(closes, period) {
+  const k = 2 / (period + 1);
+  const result = new Array(closes.length).fill(null);
+  let ema = closes[0];
+  for (let i = 0; i < closes.length; i++) {
+    if (i === 0) { result[i] = closes[0]; continue; }
+    ema = closes[i] * k + ema * (1 - k);
+    result[i] = ema;
+  }
+  return result;
+}
+
+function computeBB(closes, period = 20, mult = 2) {
+  const upper = [], mid = [], lower = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) { upper.push(null); mid.push(null); lower.push(null); continue; }
+    const slice = closes.slice(i - period + 1, i + 1);
+    const sma = slice.reduce((a, b) => a + b, 0) / period;
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b - sma) ** 2, 0) / period);
+    upper.push(sma + mult * std);
+    mid.push(sma);
+    lower.push(sma - mult * std);
+  }
+  return { upper, mid, lower };
+}
+
+// ── Prediction Page (Groww-style) ──────────────────────────────────────────
+function PredictionPage({ universe, onNavigate, initialTicker }) {
+  const [ticker, setTicker]       = useState(initialTicker || "RELIANCE.NS");
+  const [inputTicker, setInput]   = useState(initialTicker || "RELIANCE.NS");
+  const [prediction, setPred]     = useState(null);
+  const [chart, setChart]         = useState(null);
+  const [news, setNews]           = useState(null);
+  const [loading, setLoading]     = useState(false);
+  const [mode, setMode]           = useState("live");
+  const [overlays, setOverlays]   = useState({ vwap: false, ema9: false, ema21: false, bb: false });
+  const chartRef                  = useRef();
+
+  const toggleOverlay = (key) => setOverlays(prev => ({ ...prev, [key]: !prev[key] }));
+
+  useEffect(() => {
+    if (initialTicker) {
+      setTicker(initialTicker);
+      setInput(initialTicker);
+    }
+  }, [initialTicker]);
+
+  const load = useCallback(async (t) => {
+    setLoading(true);
+    try {
+      const [pred, ch, nw] = await Promise.all([
+        api(`/api/predict?ticker=${encodeURIComponent(t)}&mode=${mode}&include_news=true`),
+        api(`/api/chart?ticker=${encodeURIComponent(t)}&mode=${mode}`),
+        api(`/api/news?ticker=${encodeURIComponent(t)}`),
+      ]);
+      setPred(pred); setChart(ch); setNews(nw);
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  }, [mode]);
+
+  useEffect(() => { load(ticker); }, [ticker, mode]);
+
+  // Render Plotly chart
+  useEffect(() => {
+    if (loading || !chart || !chartRef.current || !chart.candles?.length) return;
+    try {
+      const times  = chart.candles.map(c => c.t);
+      const closes = chart.candles.map(c => c.c);
+      const trace1 = {
+        type: "candlestick", name: "Price",
+        x: times,
+        open: chart.candles.map(c => c.o),
+        high: chart.candles.map(c => c.h),
+        low:  chart.candles.map(c => c.l),
+        close: closes,
+        increasing: { line: { color: "#22c55e" }, fillcolor: "rgba(34,197,94,0.34)" },
+        decreasing: { line: { color: "#ef4444" }, fillcolor: "rgba(239,68,68,0.3)" },
+      };
+      const trace2 = {
+        type: "bar", name: "Volume",
+        x: chart.volumes?.map(v => v.t) || [],
+        y: chart.volumes?.map(v => v.v) || [],
+        yaxis: "y2",
+        marker: { color: "rgba(100,116,139,0.35)" },
+      };
+
+      const traces = [trace1, trace2];
+
+      // ── VWAP overlay ─────────────────────────────────────────────────────
+      if (overlays.vwap) {
+        const vwapVals = computeVWAP(chart.candles, chart.volumes);
+        traces.push({
+          type: "scatter", name: "VWAP", x: times, y: vwapVals,
+          line: { color: "#a855f7", width: 1.5, dash: "dash" },
+          yaxis: "y", hovertemplate: "VWAP: %{y:.2f}<extra></extra>",
+        });
+      }
+
+      // ── EMA 9 overlay ─────────────────────────────────────────────────────
+      if (overlays.ema9) {
+        traces.push({
+          type: "scatter", name: "EMA 9", x: times, y: computeEMA(closes, 9),
+          line: { color: "#3b82f6", width: 1.5 },
+          yaxis: "y", hovertemplate: "EMA 9: %{y:.2f}<extra></extra>",
+        });
+      }
+
+      // ── EMA 21 overlay ────────────────────────────────────────────────────
+      if (overlays.ema21) {
+        traces.push({
+          type: "scatter", name: "EMA 21", x: times, y: computeEMA(closes, 21),
+          line: { color: "#f59e0b", width: 1.5 },
+          yaxis: "y", hovertemplate: "EMA 21: %{y:.2f}<extra></extra>",
+        });
+      }
+
+      // ── Bollinger Bands overlay ───────────────────────────────────────────
+      if (overlays.bb) {
+        const { upper, mid, lower } = computeBB(closes);
+        traces.push({
+          type: "scatter", name: "BB Upper", x: times, y: upper,
+          line: { color: "rgba(100,116,139,0.7)", width: 1, dash: "dot" },
+          yaxis: "y", hovertemplate: "BB Upper: %{y:.2f}<extra></extra>",
+        });
+        traces.push({
+          type: "scatter", name: "BB Mid (SMA20)", x: times, y: mid,
+          line: { color: "rgba(100,116,139,0.5)", width: 1 },
+          yaxis: "y", hovertemplate: "BB Mid: %{y:.2f}<extra></extra>",
+        });
+        traces.push({
+          type: "scatter", name: "BB Lower", x: times, y: lower,
+          line: { color: "rgba(100,116,139,0.7)", width: 1, dash: "dot" },
+          fill: "tonexty", fillcolor: "rgba(100,116,139,0.06)",
+          yaxis: "y", hovertemplate: "BB Lower: %{y:.2f}<extra></extra>",
+        });
+      }
+
+      const layout = {
+        paper_bgcolor: "transparent",
+        plot_bgcolor: "transparent",
+        margin: { t: 10, b: 40, l: 60, r: 60 },
+        xaxis: { type: "date", color: "#71717a", gridcolor: "rgba(255,255,255,0.05)", rangeslider: { visible: false } },
+        yaxis:  { color: "#71717a", gridcolor: "rgba(255,255,255,0.05)", side: "right" },
+        yaxis2: { overlaying: "y", side: "left", showgrid: false, color: "#52525b", range: [0, Math.max(...(chart.volumes?.map(v=>v.v)||[1]))*5] },
+        legend: { font: { color: "#71717a" }, orientation: "h", y: -0.15 },
+        font: { family: "Inter, sans-serif", color: "#71717a" },
+      };
+      Plotly.newPlot(chartRef.current, traces, layout, { responsive: true, displayModeBar: false });
+    } catch(err) {
+      console.error("Plotly render error:", err);
+    }
+  }, [chart, loading, overlays]);
+
+  const p = prediction;
+  const label = p?.label || "NEUTRAL";
+  const conf = p ? (p.confidence * 100).toFixed(0) : "—";
+  const probs = p?.probs || { UP: 0.33, DOWN: 0.33, NEUTRAL: 0.33 };
+  const predClass = label === "UP" ? "pred-up" : label === "DOWN" ? "pred-down" : "pred-neutral";
+  const sentClass = news?.mean_sentiment > 0.1 ? "sent-pos" : news?.mean_sentiment < -0.1 ? "sent-neg" : "sent-neut";
+  const sentLabel = news?.mean_sentiment > 0.1 ? "Bullish" : news?.mean_sentiment < -0.1 ? "Bearish" : "Neutral";
+  const name = [...(universe?.nifty50 || []), ...(universe?.nifty100 || [])].find(x => x.ticker === ticker)?.name || ticker;
+  const candle = chart?.candles?.[chart.candles.length - 1];
+  const previousCandle = chart?.candles?.[chart.candles.length - 2];
+  const changePct = candle && previousCandle ? ((candle.c - previousCandle.c) / previousCandle.c) * 100 : null;
+
+  return (
+    <div className="prediction-shell">
+      {/* Header */}
+      <div className="prediction-toolbar">
+        <div className="prediction-toolbar-inner">
+          <button onClick={() => onNavigate("landing")}
+            style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+            ← Back
+          </button>
+          <div className="stock-overview" style={{ flex: 1 }}>
+            <div>
+              <div className="stock-symbol">{ticker.replace(".NS", "")} · NSE</div>
+              <div className="stock-name">{name}</div>
+              <div className="stock-price">
+                {candle ? `₹${candle.c.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "—"}
+                {changePct != null && <span className="stock-change" style={{ color: changePct >= 0 ? "#22c55e" : "#ef4444" }}>
+                  {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
+                </span>}
+              </div>
+            </div>
+            {candle && <div className="ohlc-strip">
+              <span>O <b>{candle.o.toFixed(2)}</b></span><span>H <b>{candle.h.toFixed(2)}</b></span>
+              <span>L <b>{candle.l.toFixed(2)}</b></span><span>C <b>{candle.c.toFixed(2)}</b></span>
+            </div>}
+          </div>
+          {/* Ticker selector */}
+          <div className="prediction-controls">
+            <input value={inputTicker} onChange={e => setInput(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === "Enter" && setTicker(inputTicker)}
+              className="glass-control" style={{ padding: "9px 13px", outline: "none", width: 150 }}
+              placeholder="TICKER.NS" />
+            <button className="btn-primary" style={{ padding: "8px 18px", fontSize: 13 }}
+              onClick={() => setTicker(inputTicker)}>Predict</button>
+            <button onClick={() => setMode(mode === "live" ? "replay" : "live")}
+              className="glass-control" style={{ padding: "8px 13px", fontSize: 12, cursor: "pointer" }}>
+              {mode === "live" ? "🔴 Live" : "⏪ Replay"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main layout */}
+      <div className="prediction-layout">
+
+        {/* Left — Chart */}
+        <div>
+          <div className="prediction-card chart-card" style={{ marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div><div className="section-kicker">Price action</div><div className="chart-heading">5-Min Candlestick</div></div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>NSE · {mode === "live" ? "Live" : "Replay"} · 5m interval</div>
+            </div>
+            {/* ── Overlay Toggle Buttons ───────────────────────────────── */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+              {[
+                { key: "vwap",  label: "VWAP",    color: "#a855f7" },
+                { key: "ema9",  label: "EMA 9",   color: "#3b82f6" },
+                { key: "ema21", label: "EMA 21",  color: "#f59e0b" },
+                { key: "bb",    label: "BB",       color: "#64748b" },
+              ].map(({ key, label, color }) => (
+                <button key={key}
+                  onClick={() => toggleOverlay(key)}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: 20,
+                    border: `1.5px solid ${overlays[key] ? color : "rgba(255,255,255,0.1)"}`,
+                    background: overlays[key] ? `${color}22` : "transparent",
+                    color: overlays[key] ? color : "var(--text-muted)",
+                    fontSize: 11, fontWeight: 600, cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    display: "flex", alignItems: "center", gap: 5,
+                  }}
+                >
+                  <span style={{
+                    width: 7, height: 7, borderRadius: "50%",
+                    background: overlays[key] ? color : "rgba(255,255,255,0.2)",
+                    display: "inline-block", flexShrink: 0,
+                  }} />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div style={{ position: "relative", minHeight: 320 }}>
+              {loading && <div className="skeleton" style={{ height: 320, borderRadius: 8, position: "absolute", top: 0, left: 0, right: 0, zIndex: 2 }} />}
+              {(!loading && (!chart || !chart.candles || chart.candles.length === 0)) && (
+                <div style={{ height: 320, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 13 }}>
+                  No 5-min candlestick data available yet for this stock.
+                </div>
+              )}
+              <div ref={chartRef} style={{ height: 320, visibility: loading ? "hidden" : "visible" }} />
+            </div>
+            <div className="chart-periods">
+              {["1D", "1W", "1M", "3M", "6M", "1Y", "3Y", "5Y", "All"].map((period, index) => <button key={period} className={`period-chip ${index === 0 ? "active" : ""}`}>{period}</button>)}
+            </div>
+          </div>
+
+          {/* News feed */}
+          <div className="prediction-card chart-card">
+            <div className="card-tag tag-amber">News Sentiment</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>
+                {news?.mean_sentiment != null ? news.mean_sentiment.toFixed(2) : "—"}
+              </div>
+              {news?.mean_sentiment != null && (
+                <span className={`news-sentiment-pill ${sentClass}`} style={{ fontSize: 12 }}>{sentLabel}</span>
+              )}
+              <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
+                {news?.headline_count || 0} headlines · 24h window
+              </span>
+            </div>
+            {(news?.latest_headlines || []).slice(0, 5).map((h, i) => {
+              const sc = h.sentiment_score || 0;
+              const hcls = sc > 0.1 ? "sent-pos" : sc < -0.1 ? "sent-neg" : "sent-neut";
+              const hlabel = sc > 0.1 ? "Bullish" : sc < -0.1 ? "Bearish" : "Neutral";
+              return (
+                <div key={i} className="news-item">
+                  <span className={`news-sentiment-pill ${hcls}`}>{hlabel}</span>
+                  <span className="news-headline">{h.headline || h.title}</span>
+                </div>
+              );
+            })}
+            {(!news?.latest_headlines?.length) && (
+              <div style={{ color: "var(--text-muted)", fontSize: 13 }}>Fetching latest headlines…</div>
+            )}
+          </div>
+        </div>
+
+        {/* Right — Prediction card */}
+        <div>
+          <div className="prediction-card forecast-card">
+            <div style={{ textAlign: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
+                15-Min Direction · {p?.horizon_minutes || 15} min horizon
+              </div>
+              {loading
+                ? <div className="skeleton" style={{ height: 48, borderRadius: 24, width: 140, margin: "0 auto" }} />
+                : <div className={`pred-badge ${predClass}`} style={{ margin: "0 auto", fontSize: 20 }}>
+                    {label === "UP" ? "▲" : label === "DOWN" ? "▼" : "●"} {label}
+                  </div>
+              }
+              <div style={{ fontSize: 24, fontWeight: 900, marginTop: 12, letterSpacing: -1 }}>
+                {conf}<span style={{ fontSize: 14, fontWeight: 400, color: "var(--text-muted)" }}>% confidence</span>
+              </div>
+            </div>
+
+            {/* Prob bars */}
+            {["UP","NEUTRAL","DOWN"].map(lbl => {
+              const pct = ((probs[lbl] || 0) * 100).toFixed(0);
+              const col = lbl === "UP" ? "var(--green)" : lbl === "DOWN" ? "var(--red)" : "#52525b";
+              return (
+                <div key={lbl} className="prob-bar-wrap">
+                  <div className="prob-bar-label">
+                    <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>{lbl}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: col }}>{pct}%</span>
+                  </div>
+                  <div className="prob-bar-track">
+                    <div className="prob-bar-fill" style={{ width: `${pct}%`, background: col }} />
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Why section */}
+            {p && (
+              <div style={{ marginTop: 20, padding: 14, background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 10,
+                  textTransform: "uppercase", letterSpacing: 1 }}>Why this prediction?</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                  {p.shift_summary
+                    ? <span dangerouslySetInnerHTML={{ __html: p.shift_summary.replace(/\n/g,"<br/>") }} />
+                    : "Technical baseline from LightGBM. News sentiment modifier " + (p.sentiment_applied ? "applied." : "not applied.")
+                  }
+                </div>
+                {news?.mean_sentiment != null && (
+                  <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>News Sentiment:</span>
+                    <span className={`news-sentiment-pill ${sentClass}`}>{sentLabel}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>({news.mean_sentiment.toFixed(3)})</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {p?.market_open === false && (
+              <div style={{ marginTop: 16, padding: 12, background: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.2)", borderRadius: 8, fontSize: 12, color: "#a16207", lineHeight: 1.5 }}>
+                ⚠️ Market closed. Prediction based on last available data.
+              </div>
+            )}
+
+            <button className="btn-primary" style={{ width: "100%", justifyContent: "center", marginTop: 20 }}
+              onClick={() => load(ticker)} disabled={loading}>
+              {loading ? "Computing…" : "Refresh Prediction"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Scoreboard Page ────────────────────────────────────────────────────────
+function ScoreboardPage({ onNavigate }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api("/api/scoreboard").then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <div style={{ paddingTop: 80, maxWidth: 1200, margin: "0 auto", padding: "100px 32px 60px" }}>
+      <button onClick={() => onNavigate("landing")}
+        style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", fontSize: 13, marginBottom: 24, display: "flex", alignItems: "center", gap: 6 }}>
+        ← Back to Home
+      </button>
+      <h1 style={{ fontSize: 42, fontWeight: 900, letterSpacing: -1.5, marginBottom: 8 }}>Model Scoreboard</h1>
+      <p style={{ color: "var(--text-muted)", marginBottom: 40 }}>Automated resolution of predictions after the 15-minute horizon elapses.</p>
+
+      {loading ? <div className="skeleton" style={{ height: 200, borderRadius: 16 }} /> : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
+            {[
+              { label: "Overall Accuracy", value: data?.overall_accuracy != null ? `${(data.overall_accuracy * 100).toFixed(1)}%` : "—", color: "var(--green)" },
+              { label: "Total Predictions", value: data?.total_predictions || 0 },
+              { label: "Resolved", value: data?.resolved_predictions || 0 },
+            ].map((s, i) => (
+              <div key={i} className="bento-card">
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
+                <div style={{ fontSize: 40, fontWeight: 900, letterSpacing: -1.5, color: s.color || "var(--text)" }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="bento-card">
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Recent Predictions</div>
+            {data?.recent?.length === 0 && <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No resolved predictions yet. Make a few predictions and come back!</div>}
+            {(data?.recent || []).map((r, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0",
+                borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+                <span style={{ fontWeight: 700, minWidth: 90 }}>{r.ticker?.replace(".NS","")}</span>
+                <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{r.made_at?.slice(0,16)}</span>
+                <span className={`pred-badge ${r.pred_label === "UP" ? "pred-up" : r.pred_label === "DOWN" ? "pred-down" : "pred-neutral"}`}
+                  style={{ padding: "2px 10px", fontSize: 11 }}>
+                  Predicted: {r.pred_label}
+                </span>
+                {r.actual_label && (
+                  <span style={{ color: r.correct ? "var(--green)" : "var(--red)", fontWeight: 700 }}>
+                    {r.correct ? "✓ Correct" : "✗ Wrong"} → {r.actual_label}
+                  </span>
+                )}
+                <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600 }}>
+                  {(r.confidence * 100).toFixed(0)}% conf
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Root App ───────────────────────────────────────────────────────────────
+function App() {
+  const [page, setPage]           = useState("landing");
+  const [status, setStatus]       = useState(null);
+  const [movers, setMovers]       = useState(null);
+  const [universe, setUniverse]   = useState(null);
+  const [scoreboard, setScoreboard] = useState(null);
+  const [selectedTicker, setSelectedTicker] = useState("RELIANCE.NS");
+
+  useEffect(() => {
+    // Load market status and universe immediately (fast)
+    api("/api/market_status").then(setStatus).catch(() => {});
+    api("/api/universe").then(setUniverse).catch(() => {});
+    api("/api/scoreboard").then(setScoreboard).catch(() => {});
+    // Movers can be slow (yfinance batch)
+    api("/api/movers?universe=nifty50").then(setMovers).catch(() => {});
+    // Refresh market status every 30s
+    const timer = setInterval(() => api("/api/market_status").then(setStatus).catch(() => {}), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const navigate = (pg) => setPage(pg);
+  const selectStock = (ticker) => { setSelectedTicker(ticker); setPage("predict"); };
+
+  return (
+    <>
+      <Nav status={status} onNavigate={navigate} />
+      {page === "landing" && (
+        <LandingPage status={status} movers={movers} universe={universe} scoreboard={scoreboard}
+          onNavigate={navigate} onSelectStock={selectStock} />
+      )}
+      {page === "predict" && (
+        <PredictionPage universe={universe} onNavigate={navigate} initialTicker={selectedTicker} />
+      )}
+      {page === "scoreboard" && <ScoreboardPage onNavigate={navigate} />}
+
+      {/* Disclaimer */}
+      <div className="disclaimer">
+        ⚠️ <strong>Disclaimer:</strong> PulsePredict is for educational purposes only. Predictions are generated by an ML model and do not constitute financial advice. Past accuracy does not guarantee future results. Never invest based solely on model outputs.
+      </div>
+
+      {/* Footer */}
+      <footer className="footer" style={{ maxWidth: "100%", padding: "32px" }}>
+        <div className="footer-logo">PulsePredict</div>
+        <div className="footer-note">© 2024 · NSE Intraday Intelligence · Educational use only · Free & open source</div>
+      </footer>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+<!-- app.js disabled: JSX now runs directly via Babel above -->
+<!-- <script src="/static/app.js"></script> -->
+</body>
+</html>
