@@ -19,7 +19,7 @@ import os
 import sys
 import time
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Literal, Optional
 
 import numpy as np
 import pandas as pd
@@ -232,7 +232,7 @@ async def get_universe():
 
 
 @app.get("/api/movers")
-async def get_movers(universe: str = Query(default="nifty50", enum=["nifty50", "nifty100"])):
+async def get_movers(universe: Literal["nifty50", "nifty100"] = "nifty50"):
     try:
         data = _get_movers_data(universe)
         return data
@@ -244,7 +244,7 @@ async def get_movers(universe: str = Query(default="nifty50", enum=["nifty50", "
 @app.get("/api/chart")
 async def get_chart(
     ticker: str = Query(..., description="e.g. RELIANCE.NS"),
-    mode: str = Query(default="live", enum=["live", "replay"]),
+    mode: Literal["live", "replay"] = "live",
     as_of: Optional[str] = Query(default=None),
     days: int = Query(default=5),
 ):
@@ -309,7 +309,7 @@ async def get_chart(
 @app.get("/api/predict")
 async def get_prediction(
     ticker: str = Query(...),
-    mode: str = Query(default="live", enum=["live", "replay"]),
+    mode: Literal["live", "replay"] = "live",
     as_of: Optional[str] = Query(default=None),
     include_news: bool = Query(default=True),
     news_weight: float = Query(default=0.35),
